@@ -158,7 +158,7 @@ impl Program {
                 //if more than one byte is provided, we take the 0th byte
                 let mut input = String::new();
                 match io::stdin().read_line(&mut input) {
-                    Ok(n) => {
+                    Ok(_n) => {
                         //println!("{} bytes read", n);
                         //println!("{}", input);
                         self.data[self.dp] = input.chars().collect::<Vec<char>>()[0] as u8;
