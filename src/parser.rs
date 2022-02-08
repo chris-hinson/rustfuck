@@ -30,12 +30,6 @@ pub enum AstNodeKind {
     Exp { kind: Operator },
 }
 
-/*#[derive(Debug, Clone, PartialEq, Eq)]
-enum ExpKind {
-    Loop { ops: Vec<AstNode> },
-    Operator { op: Operator },
-}*/
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operator {
     Move { amount: isize },
@@ -187,27 +181,27 @@ pub fn parse(mut tokens: Vec<Token>, level: usize) -> Result<Vec<AstNode>, Strin
     Ok(program)
 }
 
-/*pub fn optimize(head: AstNode) -> AstNode {
-    let cur = &head;
-    match head.ntype {
-        AstNodeKind::Move { dir, amount } => match &cur.next {
-            Some(v) => {
-                if v.ntype
-                    == (AstNodeKind::Move {
-                        dir: true,
-                        amount: 1,
-                    })
-                {
-                    v.amount += 1;
+//O(n) sadge
+pub fn remove_runs(mut exprs: Vec<AstNode>) {
+    let mut new_exprs: Vec<AstNode> = Vec::new();
+
+    let cur = exprs.remove(0);
+
+    match cur.ntype {
+        AstNodeKind::Exp { kind } => match kind {
+            Operator::Move { mut amount } => {
+                if exprs[0].ntype.eq(&AstNodeKind::Exp {
+                    kind: Operator::Move { amount },
+                }) {
+                    amount += 1
                 }
             }
-            None => {}
+            Operator::Change { amount } => {}
+            _ => {}
         },
-        _ => {}
+        AstNodeKind::Loop { exps } => remove_runs(exps),
     }
-
-    return head;
-}*/
+}
 
 pub fn print_ast(prg: Program) {
     for (_i, exp) in prg.exps.iter().enumerate() {
