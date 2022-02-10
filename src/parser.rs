@@ -178,29 +178,76 @@ pub fn parse(mut tokens: Vec<Token>, level: usize) -> Result<Vec<AstNode>, Strin
         program.push(node.unwrap());
     }
 
-    Ok(program)
+    program = remove_runs(program);
+    Ok(remove_runs(program))
+    //Ok(program)
 }
 
 //O(n) sadge
-pub fn remove_runs(mut exprs: Vec<AstNode>) {
+//remove runs of +,-,< and >
+pub fn remove_runs(mut exprs: Vec<AstNode>) -> Vec<AstNode> {
+    //first reverse the vec so we can pop and push in constant time
+    exprs.reverse();
     let mut new_exprs: Vec<AstNode> = Vec::new();
 
-    let cur = exprs.remove(0);
+    while exprs.len() >= 2 {
+        //pop the next char
+        let mut cur = exprs.pop().unwrap();
 
-    match cur.ntype {
-        AstNodeKind::Exp { kind } => match kind {
-            Operator::Move { mut amount } => {
-                if exprs[0].ntype.eq(&AstNodeKind::Exp {
-                    kind: Operator::Move { amount },
-                }) {
-                    amount += 1
+        //match on what kind of astnode we're currently looking at
+        match cur.ntype {
+            //if we're looking at an exp node, we might be able to eliminate it by smushing it into the next one
+            AstNodeKind::Exp { ref mut kind } => match kind {
+                //if its a move or a change op, try to smush
+                Operator::Move {
+                    amount: ref mut cam,
+                } => {
+                    //lets look at the next op to see if we can smush
+                    let end = exprs.len() - 1;
+                    match exprs[end].ntype {
+                        AstNodeKind::Exp {
+                            kind:
+                                Operator::Move {
+                                    amount: ref mut nam,
+                                },
+                        } =>
+                        //we are finally free to smush
+                        {
+                            *nam += *cam
+                        }
+                        _ => new_exprs.push(cur),
+                    }
                 }
+                Operator::Change {
+                    amount: ref mut cam,
+                } => {
+                    //lets look at the next op to see if we can smush
+                    let end = exprs.len() - 1;
+                    match exprs[end].ntype {
+                        AstNodeKind::Exp {
+                            kind:
+                                Operator::Change {
+                                    amount: ref mut nam,
+                                },
+                        } =>
+                        //we are finally free to smush
+                        {
+                            *nam += *cam
+                        }
+                        _ => new_exprs.push(cur),
+                    }
+                }
+                _ => new_exprs.push(cur),
+            },
+            AstNodeKind::Loop { exps: ref mut e } => {
+                *e = remove_runs(e.to_vec());
+                new_exprs.push(cur);
             }
-            Operator::Change { amount } => {}
-            _ => {}
-        },
-        AstNodeKind::Loop { exps } => remove_runs(exps),
+        }
     }
+
+    //new_exprs.reverse();
+    return new_exprs;
 }
 
 pub fn print_ast(prg: Program) {
