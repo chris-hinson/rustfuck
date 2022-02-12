@@ -1,4 +1,5 @@
 use crate::lexer::{Token, TokenKind};
+use owo_colors::OwoColorize;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
 /*cfg that defines our language
@@ -11,7 +12,7 @@ IO      = ',' | '.'
 */
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Program {
-    exps: Vec<AstNode>,
+    pub exps: Vec<AstNode>,
 }
 impl Program {
     pub fn new(e: Vec<AstNode>) -> Self {
@@ -21,8 +22,8 @@ impl Program {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AstNode {
-    id: usize,
-    ntype: AstNodeKind,
+    pub id: usize,
+    pub ntype: AstNodeKind,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AstNodeKind {
@@ -79,6 +80,7 @@ impl Display for AstNode {
     }
 }
 
+//turn our token sequence into an AST
 pub fn parse(mut tokens: Vec<Token>, level: usize) -> Result<Vec<AstNode>, String> {
     let mut program = Vec::new();
 
@@ -179,12 +181,11 @@ pub fn parse(mut tokens: Vec<Token>, level: usize) -> Result<Vec<AstNode>, Strin
     }
 
     program = remove_runs(program);
-    Ok(remove_runs(program))
-    //Ok(program)
+    Ok(program)
 }
 
-//O(n) sadge
-//remove runs of +,-,< and >
+//first pass optimization
+//this essentially turns our code into an IR so its no longer "technically" brainfuck code
 pub fn remove_runs(mut exprs: Vec<AstNode>) -> Vec<AstNode> {
     //first reverse the vec so we can pop and push in constant time
     exprs.reverse();
@@ -240,10 +241,16 @@ pub fn remove_runs(mut exprs: Vec<AstNode>) -> Vec<AstNode> {
                 _ => new_exprs.push(cur),
             },
             AstNodeKind::Loop { exps: ref mut e } => {
+                //println!("about to process a loop: {:?}", e.green());
                 *e = remove_runs(e.to_vec());
                 new_exprs.push(cur);
             }
         }
+    }
+
+    if exprs.len() > 0 {
+        exprs.reverse();
+        new_exprs.append(&mut exprs);
     }
 
     //new_exprs.reverse();

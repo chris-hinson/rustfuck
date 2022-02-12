@@ -1,7 +1,11 @@
 mod lexer;
 mod parser;
 mod runner;
+mod runner_naive;
 use std::env;
+
+//for profiling
+use std::time::{Duration, Instant};
 
 use std::fs;
 fn main() {
@@ -49,17 +53,36 @@ fn main() {
     };
 
     let prg = parser::Program::new(exps);
-    parser::print_ast(prg);
+    //parser::print_ast(prg.clone());
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    ///////////////////////////////////running/////////////////////////////////////////////////////
-    /*match runner::run(&source, debugging) {
+    ///////////////////////////////////running - naive/////////////////////////////////////////////
+    let start_naive = Instant::now();
+    match runner_naive::run(&source, debugging) {
         Ok(_v) => {
-            println!("program returned successfully")
+            println!("\n program returned successfully")
         }
         Err(e) => {
-            println!("program encountered an error: {}", e)
+            println!("\n program encountered an error: {}", e)
         }
-    }*/
+    }
+    let duration_naive = start_naive.elapsed().as_millis();
     ///////////////////////////////////////////////////////////////////////////////////////////////
+
+    let start_optimized = Instant::now();
+    match runner::run(prg) {
+        Ok(v) => {
+            println!("\n\n{v}");
+        }
+        Err(e) => {
+            println!("Program encountered runtime error: {:?}", e);
+        }
+    }
+    let duration_optimized = start_optimized.elapsed().as_millis();
+
+    println!("program took {} ms to run naively", duration_naive);
+    println!(
+        "program took {} ms to run with run-length compression optimization",
+        duration_optimized
+    );
 }
