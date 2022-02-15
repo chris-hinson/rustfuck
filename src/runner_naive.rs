@@ -74,6 +74,7 @@ impl fmt::Display for Program {
 }
 
 impl Program {
+    #[allow(dead_code)]
     fn new(source: &str) -> Program {
         //turn our source code string into a vector of chars
         let mut prog = source.chars().collect::<Vec<char>>();
@@ -101,7 +102,7 @@ impl Program {
     }
 
     //execute one program step
-    //returns
+    #[allow(dead_code)]
     fn step(&mut self) -> Result<bool, String> {
         //get the operator at the ip
         let op = self.prog[self.ip];
@@ -248,6 +249,7 @@ impl Program {
 }
 
 //runs some given source code, return a result of whether any runtime errors were encountered
+#[allow(dead_code)]
 pub fn run(source: &str, debugging: bool) -> Result<bool, String> {
     let mut prg = Program::new(source);
 

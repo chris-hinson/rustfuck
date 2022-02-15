@@ -1,4 +1,4 @@
-use owo_colors::OwoColorize;
+//use owo_colors::OwoColorize;
 use std::fmt;
 use std::io;
 use std::io::Write;
@@ -19,9 +19,10 @@ impl fmt::Display for Machine {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum RuntimeErr {
-    fuck,
-    how,
+    Fuck,
+    How,
 }
 
 pub fn exec(v: &Vec<AstNode>, m: &mut Machine) -> Result<String, RuntimeErr> {
@@ -83,6 +84,38 @@ pub fn exec(v: &Vec<AstNode>, m: &mut Machine) -> Result<String, RuntimeErr> {
                         io::stdout().flush().unwrap();
                     }
                 },
+                Operator::Clear {} => {
+                    m.data[m.dp] = 0;
+                }
+                Operator::Scan { alignment } => {
+                    //scan to the left
+                    if alignment < &0 {
+                        m.dp -= m.data[0..=m.dp]
+                            .iter()
+                            //.enumerate()
+                            .rev()
+                            .step_by(alignment.abs() as usize)
+                            .position(|e| {
+                                //(m.dp - e.0) % (alignment.abs() as usize) == 0 &&
+                                e == &0
+                            })
+                            .unwrap()
+                            * alignment.abs() as usize;
+                    }
+                    //scan to the right
+                    else {
+                        m.dp += m.data[m.dp..m.data.len()]
+                            .iter()
+                            .step_by(alignment.abs() as usize)
+                            //.enumerate()
+                            .position(|e| {
+                                //(e.0 - m.dp) % (alignment.abs() as usize) == 0 &&
+                                e == &0
+                            })
+                            .unwrap()
+                            * alignment.abs() as usize
+                    }
+                }
             },
             //ONLY run loop if dp is non - zero
             AstNodeKind::Loop { exps } => {
@@ -102,12 +135,6 @@ pub fn exec(v: &Vec<AstNode>, m: &mut Machine) -> Result<String, RuntimeErr> {
                 );*/
             }
         }
-        //}
-
-        //only stop looping if we are not in a loop body, or if our dp is zero
-        /*if (!loop_body) || (loop_body && m.data[m.dp] == 0) {
-            break;
-        }*/
     }
 
     return Ok("command seq ran successfully".to_owned());

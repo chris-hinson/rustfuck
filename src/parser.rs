@@ -1,5 +1,5 @@
 use crate::lexer::{Token, TokenKind};
-use owo_colors::OwoColorize;
+//use owo_colors::OwoColorize;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
 /*cfg that defines our language
@@ -36,6 +36,8 @@ pub enum Operator {
     Move { amount: isize },
     Change { amount: isize },
     IO { kind: IOKind },
+    Clear,
+    Scan { alignment: isize },
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IOKind {
@@ -181,6 +183,8 @@ pub fn parse(mut tokens: Vec<Token>, level: usize) -> Result<Vec<AstNode>, Strin
     }
 
     program = remove_runs(program);
+    program = clear_loops(&mut program).to_vec();
+    program = scan_loops(&mut program).to_vec();
     Ok(program)
 }
 
@@ -253,8 +257,67 @@ pub fn remove_runs(mut exprs: Vec<AstNode>) -> Vec<AstNode> {
         new_exprs.append(&mut exprs);
     }
 
-    //new_exprs.reverse();
     return new_exprs;
+}
+
+//this turns any loops which contains only a change operator into an explicit clear op
+pub fn clear_loops(ops: &mut Vec<AstNode>) -> &mut Vec<AstNode> {
+    //iterate over this expressions vector looking for loops we can turn into clears
+    for i in ops.iter_mut() {
+        match i.ntype {
+            //if we see a loop we need to either clear it if we can, or otherwise recurse on it to
+            //make sure it doesnt contain a nested loop which we might be able to clear
+            AstNodeKind::Loop { ref mut exps } => {
+                if exps.len() == 1 {
+                    match exps[0].ntype {
+                        AstNodeKind::Exp {
+                            kind: Operator::Change { amount: _ },
+                        } => {
+                            *i = AstNode {
+                                id: i.id - 1,
+                                ntype: AstNodeKind::Exp {
+                                    kind: Operator::Clear,
+                                },
+                            }
+                        }
+                        _ => {}
+                    }
+                } else {
+                    clear_loops(exps);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    return ops;
+}
+
+pub fn scan_loops(ops: &mut Vec<AstNode>) -> &mut Vec<AstNode> {
+    for i in ops.iter_mut() {
+        match i.ntype {
+            AstNodeKind::Loop { ref mut exps } => {
+                if exps.len() == 1 {
+                    match exps[0].ntype {
+                        AstNodeKind::Exp {
+                            kind: Operator::Move { amount },
+                        } => {
+                            *i = AstNode {
+                                id: i.id - 1,
+                                ntype: AstNodeKind::Exp {
+                                    kind: Operator::Scan { alignment: amount },
+                                },
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    return ops;
 }
 
 pub fn print_ast(prg: Program) {

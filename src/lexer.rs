@@ -1,4 +1,4 @@
-use std::fmt::{Display, Formatter, Result as FmtResult};
+//use std::fmt::{Display, Formatter, Result as FmtResult};
 //All 8 brainfuck ops can fit into 4 subtypes, each with a direction
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TokenKind {
