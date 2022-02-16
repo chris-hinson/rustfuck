@@ -116,7 +116,59 @@ pub fn exec(v: &Vec<AstNode>, m: &mut Machine) -> Result<String, RuntimeErr> {
                             * alignment.abs() as usize
                     }
                 }
+                Operator::VirtChange { amount, offset } => {
+                    if offset < &0 {
+                        let index = m.dp.saturating_sub(offset.abs() as usize);
+                        if amount < &0 {
+                            m.data[index] =
+                                m.data[index].wrapping_sub((amount.abs() % u8::MAX as isize) as u8);
+                        } else {
+                            m.data[index] =
+                                m.data[index].wrapping_add((amount.abs() % u8::MAX as isize) as u8);
+                        }
+                    } else {
+                        let index = m.dp.saturating_add(offset.abs() as usize);
+                        if amount < &0 {
+                            m.data[index] =
+                                m.data[index].wrapping_sub((amount.abs() % u8::MAX as isize) as u8);
+                        } else {
+                            m.data[index] =
+                                m.data[index].wrapping_add((amount.abs() % u8::MAX as isize) as u8);
+                        }
+                    }
+                }
+                Operator::Mult { amount, offset } => {
+                    //we need to know how many times our mult loop runs;
+                    let iters = m.data[m.dp];
+
+                    //left
+                    if offset < &0 {
+                        let index = m.dp.saturating_sub(offset.abs() as usize);
+                        if amount < &0 {
+                            m.data[index] = m.data[index].wrapping_sub(
+                                (amount.abs() * iters as isize % u8::MAX as isize) as u8,
+                            )
+                        } else {
+                            m.data[index] = m.data[index].wrapping_add(
+                                ((amount.abs() * iters as isize) % (u8::MAX as isize)) as u8,
+                            );
+                        }
+                    //right
+                    } else {
+                        let index = m.dp.saturating_add(offset.abs() as usize);
+                        if amount < &0 {
+                            m.data[index] = m.data[index].wrapping_sub(
+                                (amount.abs() * iters as isize % u8::MAX as isize) as u8,
+                            );
+                        } else {
+                            m.data[index] = m.data[index].wrapping_add(
+                                (amount.abs() * iters as isize % u8::MAX as isize) as u8,
+                            );
+                        }
+                    }
+                }
             },
+
             //ONLY run loop if dp is non - zero
             AstNodeKind::Loop { exps } => {
                 //println!("MATCHED INTO LOOP ");
@@ -139,6 +191,7 @@ pub fn exec(v: &Vec<AstNode>, m: &mut Machine) -> Result<String, RuntimeErr> {
 
     return Ok("command seq ran successfully".to_owned());
 }
+
 pub fn run(p: crate::parser::Program) -> Result<String, RuntimeErr> {
     let mut m = Machine {
         dp: 0,
