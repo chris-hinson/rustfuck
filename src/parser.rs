@@ -25,6 +25,126 @@ pub struct AstNode {
     pub id: usize,
     pub ntype: AstNodeKind,
 }
+
+//a collection of helper functions to make optimization passes neater
+#[allow(dead_code)]
+impl AstNode {
+    fn is_loop(&mut self) -> Option<&mut Vec<AstNode>> {
+        if let AstNodeKind::Loop { exps: ref mut e } = self.ntype {
+            return Some(e);
+        } else {
+            return None;
+        }
+    }
+    fn is_exp(&mut self) -> Option<&mut Operator> {
+        if let AstNodeKind::Exp { kind: ref mut k } = self.ntype {
+            return Some(k);
+        } else {
+            return None;
+        }
+    }
+    //check if our node is a certain node type. optionally check if it has a specific contents
+    fn is_change(&self, am: Option<isize>) -> Option<isize> {
+        match self.ntype {
+            AstNodeKind::Exp {
+                kind: Operator::Change { amount },
+            } => am.map_or(
+                Some(amount),
+                |am| if am == amount { Some(am) } else { None },
+            ),
+
+            _ => None,
+        }
+    }
+    fn is_move(&self, am: Option<isize>) -> Option<isize> {
+        match self.ntype {
+            AstNodeKind::Exp {
+                kind: Operator::Move { amount },
+            } => am.map_or(
+                Some(amount),
+                |am| if am == amount { Some(am) } else { None },
+            ),
+
+            _ => None,
+        }
+    }
+    //if the node is a move or a change,change its value by the amount passed in. if its not one of these types, no-op
+    fn change_amount(&mut self, am: isize) {
+        match self.ntype {
+            AstNodeKind::Exp {
+                kind: Operator::Move { amount: ref mut a },
+            }
+            | AstNodeKind::Exp {
+                kind: Operator::Change { amount: ref mut a },
+            } => {
+                *a += am;
+            }
+            _ => {}
+        }
+    }
+    fn is_io(&mut self) -> bool {
+        matches!(
+            self,
+            AstNode {
+                id: _,
+                ntype: AstNodeKind::Exp {
+                    kind: Operator::IO { kind: _ }
+                }
+            }
+        )
+    }
+    fn is_clear(&mut self) -> bool {
+        matches!(
+            self,
+            AstNode {
+                id: _,
+                ntype: AstNodeKind::Exp {
+                    kind: Operator::Clear {}
+                }
+            }
+        )
+    }
+    fn is_scan(&mut self) -> bool {
+        matches!(
+            self,
+            AstNode {
+                id: _,
+                ntype: AstNodeKind::Exp {
+                    kind: Operator::Scan { alignment: _ }
+                }
+            }
+        )
+    }
+    fn is_virt_change(&mut self) -> bool {
+        matches!(
+            self,
+            AstNode {
+                id: _,
+                ntype: AstNodeKind::Exp {
+                    kind: Operator::VirtChange {
+                        amount: _,
+                        offset: _
+                    }
+                }
+            }
+        )
+    }
+    fn is_mult(&mut self) -> bool {
+        matches!(
+            self,
+            AstNode {
+                id: _,
+                ntype: AstNodeKind::Exp {
+                    kind: Operator::Mult {
+                        amount: _,
+                        offset: _
+                    }
+                }
+            }
+        )
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AstNodeKind {
     Loop { exps: Vec<AstNode> },
@@ -187,7 +307,7 @@ pub fn parse(mut tokens: Vec<Token>, level: usize) -> Result<Vec<AstNode>, Strin
     program = remove_runs(program);
     program = clear_loops(&mut program).to_vec();
     program = scan_loops(&mut program).to_vec();
-    program = virtualize_changes(&mut program);
+    program = virtualize_changes(program);
     //run another remove run pass to remove double moves that virt may have created
     //this should be optional?
     program = remove_runs(program);
@@ -197,69 +317,51 @@ pub fn parse(mut tokens: Vec<Token>, level: usize) -> Result<Vec<AstNode>, Strin
 }
 
 //first pass optimization
-//this essentially turns our code into an IR so its no longer "technically" brainfuck code
+//this turns our code into an IR so its no longer "pure" brainfuck code
 pub fn remove_runs(mut exprs: Vec<AstNode>) -> Vec<AstNode> {
-    //first reverse the vec so we can pop and push in constant time
+    //first reverse the vec so we can get our ops in constant time via pop
     exprs.reverse();
+
+    //since we cant really modify in place, instantiate a new vector, and push the modified IR tokens into it in the order we find them
     let mut new_exprs: Vec<AstNode> = Vec::new();
 
+    //since we are looking at tokens two at a time, only iterate while there is more than one token left in the original vec
     while exprs.len() >= 2 {
-        //pop the next char
+        //pop the next node to be our cur
         let mut cur = exprs.pop().unwrap();
 
         //match on what kind of astnode we're currently looking at
         match cur.ntype {
             //if we're looking at an exp node, we might be able to eliminate it by smushing it into the next one
-            AstNodeKind::Exp { ref mut kind } => match kind {
+            AstNodeKind::Exp { kind: _ } => {
                 //if its a move or a change op, try to smush
-                Operator::Move {
-                    amount: ref mut cam,
-                } => {
-                    //lets look at the next op to see if we can smush
-                    let end = exprs.len() - 1;
-                    match exprs[end].ntype {
-                        AstNodeKind::Exp {
-                            kind:
-                                Operator::Move {
-                                    amount: ref mut nam,
-                                },
-                        } =>
-                        //we are finally free to smush
-                        {
-                            *nam += *cam
-                        }
-                        _ => new_exprs.push(cur),
-                    }
+                //lets look at the next op to see if we can smush
+                let end = exprs.len() - 1;
+                let next = &mut exprs[end];
+
+                //the only conditions where we can smush are when this node and the next are both either a change or a move
+                if cur.is_change(None).is_some() && next.is_change(None).is_some() {
+                    //change the amount of the next node by the amount of the current node
+                    next.change_amount(cur.is_change(None).unwrap());
+                } else if cur.is_move(None).is_some() && next.is_move(None).is_some() {
+                    //change the amount of the next node by the amount of the current node
+                    next.change_amount(cur.is_move(None).unwrap());
+                } else
+                //not a move or change, no smush
+                {
+                    new_exprs.push(cur);
                 }
-                Operator::Change {
-                    amount: ref mut cam,
-                } => {
-                    //lets look at the next op to see if we can smush
-                    let end = exprs.len() - 1;
-                    match exprs[end].ntype {
-                        AstNodeKind::Exp {
-                            kind:
-                                Operator::Change {
-                                    amount: ref mut nam,
-                                },
-                        } =>
-                        //we are finally free to smush
-                        {
-                            *nam += *cam
-                        }
-                        _ => new_exprs.push(cur),
-                    }
-                }
-                _ => new_exprs.push(cur),
-            },
+            }
+            //if we're looking at a loop, we need to take a break and recurse to smush all of its values
             AstNodeKind::Loop { exps: ref mut e } => {
-                //println!("about to process a loop: {:?}", e.green());
                 *e = remove_runs(e.to_vec());
+                //dont forget to push this loop onto the new vec
                 new_exprs.push(cur);
             }
         }
     }
 
+    //if we werent able to smush the last op, make sure we put it into the new_exprs vec
     if exprs.len() > 0 {
         exprs.reverse();
         new_exprs.append(&mut exprs);
@@ -270,67 +372,69 @@ pub fn remove_runs(mut exprs: Vec<AstNode>) -> Vec<AstNode> {
 
 //this turns any loops which contains only a change operator into an explicit clear op
 pub fn clear_loops(ops: &mut Vec<AstNode>) -> &mut Vec<AstNode> {
-    //iterate over this expressions vector looking for loops we can turn into clears
+    //iterate over our nodes at this level
     for i in ops.iter_mut() {
-        match i.ntype {
-            //if we see a loop we need to either clear it if we can, or otherwise recurse on it to
-            //make sure it doesnt contain a nested loop which we might be able to clear
-            AstNodeKind::Loop { ref mut exps } => {
-                if exps.len() == 1 {
-                    match exps[0].ntype {
-                        AstNodeKind::Exp {
-                            kind: Operator::Change { amount: _ },
-                        } => {
-                            *i = AstNode {
-                                id: i.id - 1,
-                                ntype: AstNodeKind::Exp {
-                                    kind: Operator::Clear,
-                                },
-                            }
-                        }
-                        _ => {}
-                    }
-                } else {
-                    clear_loops(exps);
-                }
+        //if we see a loop
+        if i.is_loop().is_some() {
+            //get its exprs
+            let exps = i.is_loop().unwrap();
+            //if it's one long and the one op is a change, turn it into a clear instead
+            if exps.len() == 1 && exps[0].is_change(None).is_some() {
+                *i = AstNode {
+                    id: i.id - 1,
+                    ntype: AstNodeKind::Exp {
+                        kind: Operator::Clear,
+                    },
+                };
+            //since it's not one op long, recurse on it to check for other clear loops
+            } else {
+                *exps = clear_loops(exps).to_vec();
             }
-            _ => {}
         }
     }
 
+    //since we have modified in place, return the original
     return ops;
 }
 
+//this turns any loop which contains only a move op into an explicit scan op
 pub fn scan_loops(ops: &mut Vec<AstNode>) -> &mut Vec<AstNode> {
+    //lets iterate over all the exps at this level
     for i in ops.iter_mut() {
-        match i.ntype {
-            AstNodeKind::Loop { ref mut exps } => {
-                if exps.len() == 1 {
-                    match exps[0].ntype {
+        //we see a loop
+        if i.is_loop().is_some() {
+            let exps = i.is_loop().unwrap();
+            //if the loop has only one op, and that op is a move, turn it into a scan loop, where the alignment is the change amount
+            if exps.len() == 1 && exps[0].is_move(None).is_some() {
+                if let AstNode {
+                    id: _,
+                    ntype:
                         AstNodeKind::Exp {
                             kind: Operator::Move { amount },
-                        } => {
-                            *i = AstNode {
-                                id: i.id - 1,
-                                ntype: AstNodeKind::Exp {
-                                    kind: Operator::Scan { alignment: amount },
-                                },
-                            }
-                        }
-                        _ => {}
+                        },
+                } = exps[0]
+                {
+                    *i = AstNode {
+                        id: i.id - 1,
+                        ntype: AstNodeKind::Exp {
+                            kind: Operator::Scan { alignment: amount },
+                        },
                     }
                 }
+            //since the loop is more than one op, check it for scan loops
+            } else {
+                *exps = scan_loops(exps).to_vec();
             }
-            _ => {}
         }
     }
 
+    //since we have modified in place, return the original
     return ops;
 }
 
 //when we see move-change sequences, we can actually do an offset change for them, followed by a move
 //this lets us do serieses of move changes without wasting time moving our poitner more than once
-pub fn virtualize_changes(ops: &mut Vec<AstNode>) -> Vec<AstNode> {
+/*pub fn virtualize_changes(ops: &mut Vec<AstNode>) -> Vec<AstNode> {
     let mut new_ops: Vec<AstNode> = Vec::new();
 
     //we keep the ops as a stack so we can pop one and look at the top to view the next
@@ -434,39 +538,122 @@ pub fn virtualize_changes(ops: &mut Vec<AstNode>) -> Vec<AstNode> {
     }
 
     return new_ops;
+}*/
+
+pub fn virtualize_changes(mut ops: Vec<AstNode>) -> Vec<AstNode> {
+    let mut new_ops: Vec<AstNode> = Vec::new();
+
+    //we keep the ops as a stack so we can pop one and look at the top to view the next
+    ops.reverse();
+
+    let mut virtual_dp: isize = 0;
+    //keep trying to virtualize as long as we have more than one node
+    while ops.len() > 1 {
+        //get our current node
+        let mut cur = ops.pop().unwrap();
+
+        //if we have a loop, we need to recurse to catch any virts in that loop
+        match cur.ntype {
+            //if we see a loop we need to recurse
+            AstNodeKind::Loop { exps: ref mut e } => {
+                //if we have a non-zero virtual dp, commit to our move before we process the loop
+                if virtual_dp != 0 {
+                    //push a virtchange, being careful to subtract one from the id,
+                    //as loop nodes have the id of their expressions, not the level they are contained in
+                    new_ops.push(AstNode {
+                        id: cur.id - 1,
+                        ntype: AstNodeKind::Exp {
+                            kind: Operator::Move { amount: virtual_dp },
+                        },
+                    });
+                    virtual_dp = 0;
+                }
+                //set the loop body's contents to be the result of the recursion, and then push the loop node
+                *e = virtualize_changes(e.to_vec());
+                new_ops.push(cur);
+            }
+            //if we are not looking at a loop, check if we can make a virtual node
+            //we can only make virt nodes out of move-change sequences
+            _ => {
+                //this never panics because we break our loop when there is only one node left
+                let end = ops.len() - 1;
+                let next = &ops[end];
+
+                //if we can make a virtual node, do it
+                if cur.is_move(None).is_some() && next.is_change(None).is_some() {
+                    //update our virtual_dp
+                    virtual_dp += cur.is_move(None).unwrap();
+                    //push a virtual node to our new_ops
+                    new_ops.push(AstNode {
+                        id: cur.id,
+                        ntype: AstNodeKind::Exp {
+                            kind: Operator::VirtChange {
+                                amount: next.is_change(None).unwrap(),
+                                offset: virtual_dp,
+                            },
+                        },
+                    });
+
+                    //pop off the change to get rid of it since we're virtualizing it
+                    ops.pop();
+                }
+                //if we cant make a virtual node, commit our virtual dp, then push the current node
+                else {
+                    if virtual_dp != 0 {
+                        new_ops.push(AstNode {
+                            id: cur.id,
+                            ntype: AstNodeKind::Exp {
+                                kind: Operator::Move { amount: virtual_dp },
+                            },
+                        });
+                        virtual_dp = 0;
+                    }
+                    new_ops.push(cur);
+                }
+            }
+        }
+    }
+
+    //do we need this?
+    //if we are finished with this sequence of exps and still have a virtualdp, commit it
+    if virtual_dp != 0 {
+        //println!("commit move at end");
+        new_ops.push(AstNode {
+            id: new_ops[0].id,
+            ntype: AstNodeKind::Exp {
+                kind: Operator::Move { amount: virtual_dp },
+            },
+        });
+    }
+    if ops.len() > 0 {
+        ops.reverse();
+        new_ops.append(&mut ops);
+    }
+
+    return new_ops;
 }
 
 //remove any moves or changes by 0
 fn remove_nops(ops: &mut Vec<AstNode>) -> &mut Vec<AstNode> {
+    //retain only values which are NOT nops
     ops.retain(|ele| match ele.ntype {
         AstNodeKind::Exp {
             kind: Operator::Move { amount },
-        } => {
-            if amount != 0 {
-                true
-            } else {
-                false
-            }
-        }
+        } => amount != 0,
         AstNodeKind::Exp {
             kind: Operator::Change { amount },
-        } => {
-            if amount != 0 {
-                true
-            } else {
-                false
-            }
-        }
+        } => amount != 0,
         _ => true,
     });
 
+    //now recurse on any loops we find
     for e in ops.iter_mut() {
-        match e.ntype {
-            AstNodeKind::Loop { exps: ref mut e } => *e = remove_nops(e).to_vec(),
-            _ => {}
+        if e.is_loop().is_some() {
+            let exps = e.is_loop().unwrap();
+            *exps = remove_nops(exps).to_vec();
         }
     }
-
+    //return original since we modified in place
     return ops;
 }
 
@@ -518,11 +705,10 @@ fn mult_loops(ops: &mut Vec<AstNode>) -> &mut Vec<AstNode> {
         }
     ));
 
-    println!("is a mult loop? {is_mult}");
+    //println!("is a mult loop? {is_mult}");
 
     //if this is a mult loop, flatten it
     if is_mult {
-
         //only keep our virtchanges
         ops.retain(|ele| {
             matches!(
@@ -585,4 +771,19 @@ pub fn print_ast(prg: Program) {
             }
         }
     }
+}
+
+pub fn num_tokens(e: &mut Vec<AstNode>) -> u128 {
+    //initialize this level to have cur tokens
+    let mut sub_total = 0;
+    //iterate over our tokens, recursing if we see a loop
+    for i in e.iter_mut() {
+        //if we have a loop, recurse and add, otherwise just add one
+        match i.is_loop() {
+            Some(v) => sub_total += num_tokens(v),
+            None => sub_total += 1,
+        }
+    }
+
+    return sub_total;
 }
