@@ -60,11 +60,11 @@ fn main() {
     };
 
     let mut prg = parser::Program::new(exps);
-    /*parser::print_ast(prg.clone());
+    parser::print_ast(prg.clone());
     println!(
         "there are {} tokens in our ast",
         parser::num_tokens(&mut prg.exps)
-    );*/
+    );
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
     ///////////////////////////////////running - naive/////////////////////////////////////////////

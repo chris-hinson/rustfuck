@@ -683,28 +683,33 @@ pub fn mult_loops(ops: &mut Vec<AstNode>) -> &mut Vec<AstNode> {
             //get its exprs
             let exps = i.is_loop().unwrap();
 
+            //test if the first and last nodes are change nodes
             let first_change = exps[0].is_change(None).is_some();
             let last_change = exps[exps.len() - 1].is_change(None).is_some();
 
+            //clone our exps for testing purposes
             let mut new_exps = exps.clone();
+            //remove whichever node is a change
             if first_change {
                 new_exps.remove(0);
             } else if last_change {
                 new_exps.pop();
             }
-
+            //once we have remove the change nodes, test if there are any nodes remaining that are non-virtchanges
             let only_virts = !new_exps.iter().any(|e| !e.is_virt_change(None).is_some());
 
-            //if it starts or ends with a change, and then contains only virtchanges otherwise, turn it into a mult
+            //if it starts or ends with a change(but not both), and then contains only virtchanges otherwise, turn it into a mult
             if (first_change != last_change) && only_virts {
-                //first figure out our iters and remove the change node
+                println!("found loop: {:?}", exps);
+                //first figure out our iter change amount and remove the change node
                 let iters = if exps[0].is_change(None).is_some() {
-                    exps.remove(0).is_change(None).unwrap().abs()
+                    exps.remove(0).is_change(None).unwrap()
                 } else {
-                    exps.pop().unwrap().is_change(None).unwrap().abs()
+                    exps.pop().unwrap().is_change(None).unwrap()
                 };
+                println!("iter change am: {}", iters);
 
-                //println!("these should all be virtchanges: {:?}", exps);
+                println!("these should all be virtchanges: {:?}", exps);
                 //get all of our mults into a nice vec
                 let mut mults: Vec<(isize, isize)> = Vec::new();
                 for i in exps {
@@ -719,6 +724,8 @@ pub fn mult_loops(ops: &mut Vec<AstNode>) -> &mut Vec<AstNode> {
                         kind: Operator::Mult { iters, mults },
                     },
                 };
+                println!("new node: {:?}", i);
+                println!();
             //since its not a mult loop, recurse on it to check for mult loops
             } else {
                 *exps = clear_loops(exps).to_vec();
