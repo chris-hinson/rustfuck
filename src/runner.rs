@@ -137,33 +137,38 @@ pub fn exec(v: &Vec<AstNode>, m: &mut Machine) -> Result<String, RuntimeErr> {
                         }
                     }
                 }
-                Operator::Mult { amount, offset } => {
+                //this is a specialized mult loop, it incurs no overall movement, and always zeros its starting cell
+                Operator::Mult { iters, mults } => {
                     //we need to know how many times our mult loop runs;
-                    let iters = m.data[m.dp];
+                    let iters = m.data[m.dp] / ((iters % u8::MAX as isize) as u8);
+                    m.data[m.dp] = 0;
 
-                    //left
-                    if offset < &0 {
-                        let index = m.dp.saturating_sub(offset.abs() as usize);
-                        if amount < &0 {
-                            m.data[index] = m.data[index].wrapping_sub(
-                                (amount.abs() * iters as isize % u8::MAX as isize) as u8,
-                            )
+                    //(amount, offset)
+                    for mul in mults {
+                        //left
+                        if mul.1 < 0 {
+                            let index = m.dp.saturating_sub(mul.1.abs() as usize);
+                            if mul.0 < 0 {
+                                m.data[index] = m.data[index].wrapping_sub(
+                                    (mul.0.abs() * iters as isize % u8::MAX as isize) as u8,
+                                )
+                            } else {
+                                m.data[index] = m.data[index].wrapping_add(
+                                    ((mul.0.abs() * iters as isize) % (u8::MAX as isize)) as u8,
+                                );
+                            }
+                        //right
                         } else {
-                            m.data[index] = m.data[index].wrapping_add(
-                                ((amount.abs() * iters as isize) % (u8::MAX as isize)) as u8,
-                            );
-                        }
-                    //right
-                    } else {
-                        let index = m.dp.saturating_add(offset.abs() as usize);
-                        if amount < &0 {
-                            m.data[index] = m.data[index].wrapping_sub(
-                                (amount.abs() * iters as isize % u8::MAX as isize) as u8,
-                            );
-                        } else {
-                            m.data[index] = m.data[index].wrapping_add(
-                                (amount.abs() * iters as isize % u8::MAX as isize) as u8,
-                            );
+                            let index = m.dp.saturating_add(mul.1.abs() as usize);
+                            if mul.0 < 0 {
+                                m.data[index] = m.data[index].wrapping_sub(
+                                    (mul.0.abs() * iters as isize % u8::MAX as isize) as u8,
+                                );
+                            } else {
+                                m.data[index] = m.data[index].wrapping_add(
+                                    (mul.0.abs() * iters as isize % u8::MAX as isize) as u8,
+                                );
+                            }
                         }
                     }
                 }
