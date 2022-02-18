@@ -177,7 +177,8 @@ pub fn exec(v: &Vec<AstNode>, m: &mut Machine) -> Result<String, RuntimeErr> {
                             /*m.data[index] = m.data[index]
                             .wrapping_sub((total_change.abs() % u8::MAX as isize) as u8);*/
                             for _i in 0..num_loops {
-                                m.data[index] = m.data[index].wrapping_sub(change_per_loop.abs() as u8);
+                                m.data[index] =
+                                    m.data[index].wrapping_sub(change_per_loop.abs() as u8);
                             }
                         }
                         //if its positive, do a wrapping add
@@ -185,9 +186,9 @@ pub fn exec(v: &Vec<AstNode>, m: &mut Machine) -> Result<String, RuntimeErr> {
                             /*m.data[index] = m.data[index]
                             .wrapping_add((total_change.abs() % u8::MAX as isize) as u8);*/
                             for _i in 0..num_loops {
-                                m.data[index] = m.data[index].wrapping_add(change_per_loop.abs() as u8);
+                                m.data[index] =
+                                    m.data[index].wrapping_add(change_per_loop.abs() as u8);
                             }
-
                         }
                     }
 
@@ -215,6 +216,7 @@ pub fn exec(v: &Vec<AstNode>, m: &mut Machine) -> Result<String, RuntimeErr> {
         }
     }
 
+    //println!("tape: {:?}", m.data);
     return Ok("command seq ran successfully".to_owned());
 }
 

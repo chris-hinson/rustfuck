@@ -258,7 +258,7 @@ pub fn parse(mut tokens: Vec<Token>, level: usize) -> Result<Vec<AstNode>, Strin
                         kind: Operator::Change { amount: 1 },
                     },
                 }),
-                _ => Err("Dp move with bad direction".to_owned()),
+                _ => Err("Data Change with bad direction".to_owned()),
             },
             TokenKind::Io { dir } => match dir.as_str() {
                 "out" => Ok(AstNode {
@@ -277,7 +277,7 @@ pub fn parse(mut tokens: Vec<Token>, level: usize) -> Result<Vec<AstNode>, Strin
                         },
                     },
                 }),
-                _ => Err("Dp move with bad direction".to_owned()),
+                _ => Err("Io with bad direction".to_owned()),
             },
             TokenKind::Loop { dir } => match dir.as_str() {
                 "left" => {
@@ -316,23 +316,27 @@ pub fn parse(mut tokens: Vec<Token>, level: usize) -> Result<Vec<AstNode>, Strin
                         },
                     })
                 }
-                "right" => Err("encountered end of a loop".to_owned()),
-                _ => Err("Dp move with bad direction".to_owned()),
+                "right" => Err("unmatched bracket".to_owned()),
+                _ => Err("Loop with bad direction".to_owned()),
             },
         };
         program.push(node.unwrap());
     }
 
-    program = remove_runs(program);
-    program = clear_loops(&mut program).to_vec();
-    program = scan_loops(&mut program).to_vec();
-    program = virtualize_changes(program);
+    Ok(program)
+}
+
+pub fn optimize(mut e: Vec<AstNode>) -> Vec<AstNode> {
+    e = remove_runs(e);
+    e = clear_loops(&mut e).to_vec();
+    e = scan_loops(&mut e).to_vec();
+    e = virtualize_changes(e);
     //run another remove run pass to remove double moves that virt may have created
     //this should be optional?
-    program = remove_runs(program);
-    program = remove_nops(&mut program).to_vec();
-    program = mult_loops(&mut program).to_vec();
-    Ok(program)
+    e = remove_runs(e);
+    e = remove_nops(&mut e).to_vec();
+    e = mult_loops(&mut e).to_vec();
+    return e;
 }
 
 //first pass optimization
@@ -382,7 +386,18 @@ pub fn remove_runs(mut exprs: Vec<AstNode>) -> Vec<AstNode> {
 
     //if we werent able to smush the last op, make sure we put it into the new_exprs vec
     if exprs.len() > 0 {
-        exprs.reverse();
+        //exprs.reverse();
+        let mut last = exprs.pop().unwrap();
+        match last.ntype {
+            AstNodeKind::Exp { kind: _ } => {
+                new_exprs.push(last);
+            }
+            AstNodeKind::Loop { exps: ref mut e } => {
+                *e = remove_runs(e.to_vec());
+                //dont forget to push this loop onto the new vec
+                new_exprs.push(last);
+            }
+        }
         new_exprs.append(&mut exprs);
     }
 
@@ -538,9 +553,16 @@ pub fn virtualize_changes(mut ops: Vec<AstNode>) -> Vec<AstNode> {
             },
         });
     }
+
     if ops.len() > 0 {
-        ops.reverse();
-        new_ops.append(&mut ops);
+        let mut last = ops.pop().unwrap();
+        match last.ntype {
+            AstNodeKind::Exp { kind: _ } => new_ops.push(last),
+            AstNodeKind::Loop { exps: ref mut e } => {
+                *e = virtualize_changes(e.to_vec());
+                new_ops.push(last);
+            }
+        }
     }
 
     return new_ops;
@@ -700,16 +722,16 @@ pub fn mult_loops(ops: &mut Vec<AstNode>) -> &mut Vec<AstNode> {
 
             //if it starts or ends with a change(but not both), and then contains only virtchanges otherwise, turn it into a mult
             if (first_change != last_change) && only_virts {
-                println!("found loop: {:?}", exps);
+                //println!("found loop: {:?}", exps);
                 //first figure out our iter change amount and remove the change node
                 let iters = if exps[0].is_change(None).is_some() {
                     exps.remove(0).is_change(None).unwrap()
                 } else {
                     exps.pop().unwrap().is_change(None).unwrap()
                 };
-                println!("iter change am: {}", iters);
+                //println!("iter change am: {}", iters);
 
-                println!("these should all be virtchanges: {:?}", exps);
+                //println!("these should all be virtchanges: {:?}", exps);
                 //get all of our mults into a nice vec
                 let mut mults: Vec<(isize, isize)> = Vec::new();
                 for i in exps {
@@ -724,11 +746,11 @@ pub fn mult_loops(ops: &mut Vec<AstNode>) -> &mut Vec<AstNode> {
                         kind: Operator::Mult { iters, mults },
                     },
                 };
-                println!("new node: {:?}", i);
-                println!();
-            //since its not a mult loop, recurse on it to check for mult loops
+                //println!("new node: {:?}", i);
+                //println!();
+                //since its not a mult loop, recurse on it to check for mult loops
             } else {
-                *exps = clear_loops(exps).to_vec();
+                *exps = mult_loops(exps).to_vec();
             }
         }
     }
@@ -763,4 +785,34 @@ pub fn num_tokens(e: &mut Vec<AstNode>) -> u128 {
     }
 
     return sub_total;
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::*;
+    use std::fs;
+
+    #[test]
+    fn brackets() {
+        //first we test to make sure nested brackets parse correctly
+        let filename = "./programs/tests/parsing_tests/matched_brackets.bf";
+        let in_string = fs::read_to_string(&filename).unwrap();
+        let lex = lexer::lex(&in_string).unwrap();
+        let parse = parser::parse(lex, 0);
+
+        //this should parse fine
+        assert!(parse.is_ok());
+
+        let filename = "./programs/tests/parsing_tests/unmatched_brackets.bf";
+        let in_string = fs::read_to_string(&filename).unwrap();
+        let lex = lexer::lex(&in_string).unwrap();
+        let parse = parser::parse(lex, 0);
+        //this should be an err
+        assert!(parse.is_err());
+    }
+
+    #[test]
+    fn infinite_loop() {
+        unimplemented!()
+    }
 }

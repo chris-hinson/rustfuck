@@ -2,6 +2,7 @@ mod lexer;
 mod parser;
 mod runner;
 mod runner_naive;
+mod tests;
 use std::env;
 
 //for profiling
@@ -59,7 +60,9 @@ fn main() {
         }
     };
 
-    let mut prg = parser::Program::new(exps);
+    let e_optimized = parser::optimize(exps);
+    let mut prg = parser::Program::new(e_optimized);
+
     parser::print_ast(prg.clone());
     println!(
         "there are {} tokens in our ast",

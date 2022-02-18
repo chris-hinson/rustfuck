@@ -110,3 +110,26 @@ pub fn lex(source: &str) -> Result<Vec<Token>, String> {
 
     Ok(prog)
 }
+
+//lexing tests (insofar as they are)
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    //test a file with commends in it
+    #[test]
+    fn test_file_with_comments() {
+        let filename = "./programs/tests/lexing_tests/comments.bf";
+        let file_string = fs::read_to_string(filename).unwrap();
+        let _lex_result = lex(&file_string).unwrap();
+    }
+
+    //test a minified file
+    #[test]
+    fn test_file_without_comments() {
+        let filename = "./programs/tests/lexing_tests/no_comments.bf";
+        let file_string = fs::read_to_string(filename).unwrap();
+        let _lex_result = lex(&file_string).unwrap();
+    }
+}
