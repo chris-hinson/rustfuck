@@ -29,6 +29,8 @@ fn main() {
         false
     };
 
+    let optimizing = !args.contains(&"O0".to_string());
+
     //read in our sourcecode from a file
     let source = match fs::read_to_string(filename) {
         Ok(v) => v,
@@ -60,8 +62,12 @@ fn main() {
         }
     };
 
-    let e_optimized = parser::optimize(exps);
-    let mut prg = parser::Program::new(e_optimized);
+    let mut prg = if optimizing {
+        let e_optimized = parser::optimize(exps);
+        parser::Program::new(e_optimized)
+    } else {
+        parser::Program::new(exps)
+    };
 
     parser::print_ast(prg.clone());
     println!(

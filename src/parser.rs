@@ -705,7 +705,7 @@ pub fn mult_loops(ops: &mut Vec<AstNode>) -> &mut Vec<AstNode> {
             //get its exprs
             let exps = i.is_loop().unwrap();
 
-            //test if the first and last nodes are change nodes
+            //test if the first or last nodes are change nodes
             let first_change = exps[0].is_change(None).is_some();
             let last_change = exps[exps.len() - 1].is_change(None).is_some();
 

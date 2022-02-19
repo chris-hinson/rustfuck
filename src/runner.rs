@@ -1,9 +1,10 @@
 //use owo_colors::OwoColorize;
+use crate::parser::{AstNode, AstNodeKind, IOKind, Operator};
+use console::Term;
 use std::fmt;
 use std::io;
+//use std::io::Error;
 use std::io::Write;
-
-use crate::parser::{AstNode, AstNodeKind, IOKind, Operator};
 
 pub struct Machine {
     dp: usize,
@@ -20,11 +21,18 @@ impl fmt::Display for Machine {
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum RuntimeErr {
-    Fuck,
+    IoErr(std::io::Error),
     How,
 }
 
-pub fn exec(v: &Vec<AstNode>, m: &mut Machine) -> Result<String, RuntimeErr> {
+impl From<std::io::Error> for RuntimeErr {
+    fn from(err: std::io::Error) -> Self {
+        RuntimeErr::IoErr(err)
+    }
+}
+
+//function needs to know what it is executing, the machine abstraction, and our terminal abstraction for io
+pub fn exec(v: &Vec<AstNode>, m: &mut Machine, t: &mut Term) -> Result<String, RuntimeErr> {
     for i in v {
         //println!("looking at node of type: {:?}", i.green());
         //println!("machine looks like: {}", m);
@@ -32,10 +40,10 @@ pub fn exec(v: &Vec<AstNode>, m: &mut Machine) -> Result<String, RuntimeErr> {
         //always check if we have iterated off the end of the data tape, and extend if we have.
         //Checking before we execute allows all cases to access the data tape without worrying about nullpointering
         //initialize new cells to 0s
-        if m.dp >= m.data.len() {
+        /*if m.dp >= m.data.len() {
             println!("RESIZING ARRY");
             m.data.resize(m.data.len() + (m.data.len() * 2), 0);
-        }
+        }*/
 
         //match on type of the current node
         match &i.ntype {
@@ -69,28 +77,16 @@ pub fn exec(v: &Vec<AstNode>, m: &mut Machine) -> Result<String, RuntimeErr> {
                 Operator::IO { kind } => match kind {
                     //get a single byte of input and put it at data[dp]
                     IOKind::Input => {
-                        let mut input = String::new();
-                        match io::stdin().read_line(&mut input) {
-                            Ok(_n) => {
-                                //println!("{} bytes read", n);
-                                //println!("{}", input);
-                                m.data[m.dp] = input.chars().collect::<Vec<char>>()[0] as u8;
-                            }
-                            Err(error) => {}
-                        }
+                        let in_char = t.read_char()?;
+                        m.data[m.dp] = in_char as u8;
                     }
                     //output the ascii char at data[dp]
                     IOKind::Output => {
-                        /*println!(
-                            "{}",
-                            format!("OUTPUT NODE: dp:{}, *dp:{}", m.dp, m.data[m.dp]).yellow()
-                        );
-                        println!("output node: dp = {}, val = {} ", m.dp, m.data[m.dp]);*/
-                        //print value at dp as ascii
-                        let mut dst = [0; 2];
+                        /*let mut dst = [0; 2];
                         let result = (m.data[m.dp] as char).encode_utf8(&mut dst);
                         print!("{}", result);
-                        io::stdout().flush().unwrap();
+                        io::stdout().flush().unwrap();*/
+                        t.write(&m.data[m.dp..=m.dp])?;
                     }
                 },
                 Operator::Clear {} => {
@@ -174,21 +170,21 @@ pub fn exec(v: &Vec<AstNode>, m: &mut Machine) -> Result<String, RuntimeErr> {
 
                         //if the change is negative, do a wrapping sub
                         if total_change < 0 {
-                            /*m.data[index] = m.data[index]
-                            .wrapping_sub((total_change.abs() % u8::MAX as isize) as u8);*/
-                            for _i in 0..num_loops {
+                            m.data[index] = m.data[index]
+                                .wrapping_sub((total_change.abs() % u8::MAX as isize) as u8);
+                            /*for _i in 0..num_loops {
                                 m.data[index] =
                                     m.data[index].wrapping_sub(change_per_loop.abs() as u8);
-                            }
+                            }*/
                         }
                         //if its positive, do a wrapping add
                         else {
-                            /*m.data[index] = m.data[index]
-                            .wrapping_add((total_change.abs() % u8::MAX as isize) as u8);*/
-                            for _i in 0..num_loops {
+                            m.data[index] = m.data[index]
+                                .wrapping_add((total_change.abs() % u8::MAX as isize) as u8);
+                            /*for _i in 0..num_loops {
                                 m.data[index] =
                                     m.data[index].wrapping_add(change_per_loop.abs() as u8);
-                            }
+                            }*/
                         }
                     }
 
@@ -206,7 +202,7 @@ pub fn exec(v: &Vec<AstNode>, m: &mut Machine) -> Result<String, RuntimeErr> {
                         format!("executing loop bc dp is at {}, val: {}", m.dp, m.data[m.dp])
                             .cyan()
                     );*/
-                    exec(exps, m)?;
+                    exec(exps, m, t)?;
                 }
                 /*println!(
                     "{}",
@@ -226,6 +222,7 @@ pub fn run(p: crate::parser::Program) -> Result<String, RuntimeErr> {
         //prog: p,
         data: vec![0; 30_000],
     };
+    let mut term = Term::stdout();
 
-    return exec(&p.exps, &mut m);
+    return exec(&p.exps, &mut m, &mut term);
 }
