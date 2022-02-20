@@ -1,3 +1,4 @@
+mod codegen;
 mod lexer;
 mod parser;
 mod runner;
@@ -90,7 +91,7 @@ fn main() {
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
-    let start_optimized = Instant::now();
+    /*let start_optimized = Instant::now();
     match runner::run(prg) {
         Ok(v) => {
             println!("\n\n{v}: took {} ms", start_optimized.elapsed().as_millis());
@@ -98,14 +99,10 @@ fn main() {
         Err(e) => {
             println!("Program encountered runtime error: {:?}", e);
         }
-    }
+    }*/
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    /*println!("program took {} ms to run naively", duration_naive);
-    println!(
-        "program took {} ms to run with run-length compression optimization",
-        duration_optimized
-    );*/
+    codegen::create_x86("thisisatestfile".to_string()).unwrap();
 }
 
 //call this function anytime we get a malformed call

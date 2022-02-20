@@ -79,13 +79,11 @@ pub fn exec(v: &Vec<AstNode>, m: &mut Machine, t: &mut Term) -> Result<String, R
                     IOKind::Input => {
                         let in_char = t.read_char()?;
                         m.data[m.dp] = in_char as u8;
+                        //write the char to console so people can see what they type lol
+                        t.write(&m.data[m.dp..=m.dp])?;
                     }
                     //output the ascii char at data[dp]
                     IOKind::Output => {
-                        /*let mut dst = [0; 2];
-                        let result = (m.data[m.dp] as char).encode_utf8(&mut dst);
-                        print!("{}", result);
-                        io::stdout().flush().unwrap();*/
                         t.write(&m.data[m.dp..=m.dp])?;
                     }
                 },
@@ -170,21 +168,11 @@ pub fn exec(v: &Vec<AstNode>, m: &mut Machine, t: &mut Term) -> Result<String, R
 
                         //if the change is negative, do a wrapping sub
                         if total_change < 0 {
-                            m.data[index] = m.data[index]
-                                .wrapping_sub((total_change.abs() % u8::MAX as isize) as u8);
-                            /*for _i in 0..num_loops {
-                                m.data[index] =
-                                    m.data[index].wrapping_sub(change_per_loop.abs() as u8);
-                            }*/
+                            m.data[index] = m.data[index].wrapping_sub(total_change.abs() as u8);
                         }
                         //if its positive, do a wrapping add
                         else {
-                            m.data[index] = m.data[index]
-                                .wrapping_add((total_change.abs() % u8::MAX as isize) as u8);
-                            /*for _i in 0..num_loops {
-                                m.data[index] =
-                                    m.data[index].wrapping_add(change_per_loop.abs() as u8);
-                            }*/
+                            m.data[index] = m.data[index].wrapping_add(total_change.abs() as u8);
                         }
                     }
 

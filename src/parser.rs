@@ -328,14 +328,14 @@ pub fn parse(mut tokens: Vec<Token>, level: usize) -> Result<Vec<AstNode>, Strin
 
 pub fn optimize(mut e: Vec<AstNode>) -> Vec<AstNode> {
     e = remove_runs(e);
-    e = clear_loops(&mut e).to_vec();
+    /*e = clear_loops(&mut e).to_vec();
     e = scan_loops(&mut e).to_vec();
     e = virtualize_changes(e);
     //run another remove run pass to remove double moves that virt may have created
     //this should be optional?
     e = remove_runs(e);
     e = remove_nops(&mut e).to_vec();
-    e = mult_loops(&mut e).to_vec();
+    e = mult_loops(&mut e).to_vec();*/
     return e;
 }
 
@@ -596,104 +596,6 @@ fn remove_nops(ops: &mut Vec<AstNode>) -> &mut Vec<AstNode> {
 //TODO: can we generalize this?
 //mult loops will look like virtual changes with a single change at the beginning or end
 //TODO: account for mult loops with non-1 increments
-/*fn mult_loops(ops: &mut Vec<AstNode>) -> &mut Vec<AstNode> {
-    let first = &ops[0];
-    let last = &ops[ops.len() - 1];
-
-    //this is a mult loop if there are no instances of non change or non virt-change and either the first or last op is a change
-    let is_mult = !ops.iter().any(|e| {
-        !matches!(
-            e,
-            AstNode {
-                id: _,
-                ntype: AstNodeKind::Exp {
-                    kind: Operator::Change { amount: _ }
-                }
-            }
-        ) || !matches!(
-            e,
-            AstNode {
-                id: _,
-                ntype: AstNodeKind::Exp {
-                    kind: Operator::VirtChange {
-                        amount: _,
-                        offset: _
-                    }
-                }
-            }
-        )
-    }) && (matches!(
-        first,
-        AstNode {
-            id: _,
-            ntype: AstNodeKind::Exp {
-                kind: Operator::Change { amount: -1 }
-            }
-        }
-    ) || matches!(
-        last,
-        AstNode {
-            id: _,
-            ntype: AstNodeKind::Exp {
-                kind: Operator::Change { amount: -1 }
-            }
-        }
-    ));
-
-    //println!("is a mult loop? {is_mult}");
-
-    //if this is a mult loop, flatten it
-    if is_mult {
-        //only keep our virtchanges
-        ops.retain(|ele| {
-            matches!(
-                ele,
-                AstNode {
-                    id: _,
-                    ntype: AstNodeKind::Exp {
-                        kind: Operator::VirtChange {
-                            amount: _,
-                            offset: _
-                        }
-                    }
-                }
-            )
-        });
-
-        //now turn all the VirtChanges into mults
-        for i in ops.iter_mut() {
-            if let AstNodeKind::Exp { ref mut kind } = i.ntype {
-                match kind {
-                    Operator::VirtChange {
-                        amount: a,
-                        offset: o,
-                    } => {
-                        *kind = Operator::Mult {
-                            amount: *a,
-                            offset: *o,
-                        };
-                        i.id -= 1;
-                    }
-                    Operator::Change { amount: _ } => {
-                        *kind = Operator::Clear {};
-                        i.id -= 1;
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-    //if its not a mult loop, it might contain a mult loop, so recurse on the loops it contains
-    else {
-        for i in ops.iter_mut() {
-            if let AstNodeKind::Loop { exps: ref mut e } = i.ntype {
-                *e = mult_loops(e).to_vec();
-            }
-        }
-    }
-
-    return ops;
-}*/
 
 //we are catching a very specific kind of loop
 //if a loop contains only virtchanges and then one normal change(in the first or last index), we can flatten it into a mult op
