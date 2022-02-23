@@ -6,9 +6,6 @@ mod runner_naive;
 mod tests;
 use std::env;
 
-//for profiling
-use std::time::Instant;
-
 use std::fs;
 fn main() {
     //////////////////////////////encironment program setup////////////////////////////////////////
@@ -20,16 +17,14 @@ fn main() {
         return;
     }
 
-    let filename = format!("./programs/{}", args[1]);
+    //let filename = format!("./programs/{}", args[1]);
+    let filename = &args[1];
     println!("running {}", filename);
 
-    //TODO: implement debugging mode in our VM runner
-    let _debugging = if args.len() > 2 && args[2].eq("d") {
-        true
-    } else {
-        false
-    };
+    //if debugging is enabled, print our ast
+    let debugging = args.contains(&"d".to_string());
 
+    //optimization is only on or off
     let optimizing = !args.contains(&"O0".to_string());
 
     //read in our sourcecode from a file
@@ -46,23 +41,22 @@ fn main() {
     let tokenized = match lexer::lex(&source) {
         Ok(v) => v,
         Err(e) => {
-            println!("ran into an error while lexing: {}", e);
+            println!("Error while lexing: {}", e);
             return;
         }
     };
-    //println!("tokenized: {:?}", tokenized);
-    //println!("{} tokens", tokenized.len());
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
     ////////////////////////////////parsing////////////////////////////////////////////////////////
     let exps = match parser::parse(tokenized, 0) {
         Ok(v) => v,
         Err(e) => {
-            println!("Error while parsing input file: {}", e);
+            println!("Error while parsing: {}", e);
             return;
         }
     };
 
+    //generate our ast
     let mut prg = if optimizing {
         let e_optimized = parser::optimize(exps);
         parser::Program::new(e_optimized)
@@ -70,11 +64,13 @@ fn main() {
         parser::Program::new(exps)
     };
 
-    parser::print_ast(prg.clone());
-    println!(
-        "there are {} tokens in our ast",
-        parser::num_tokens(&mut prg.exps)
-    );
+    if debugging {
+        parser::print_ast(prg.clone());
+        println!(
+            "there are {} tokens in our ast",
+            parser::num_tokens(&mut prg.exps)
+        );
+    }
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
     ///////////////////////////////////running - naive/////////////////////////////////////////////
@@ -102,7 +98,20 @@ fn main() {
     }*/
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    codegen::create_x86("thisisatestfile".to_string()).unwrap();
+    let bf_prg_name = args[1].split("/").last().unwrap().split(".").nth(0).unwrap();
+    //println!("bf_prg_raw_name is {bf_prg_name}");
+    /*println!(
+        "{:?}",
+        codegen::create_x86(bf_prg_name.to_string(), prg.exps)
+    );*/
+    match codegen::create_x86(bf_prg_name.to_string(), prg.exps) {
+        Ok(v) => {
+            println!("program executable created: {v}")
+        }
+        Err(e) => {
+            println!("there was an error creating our executable: {:?}", e)
+        }
+    }
 }
 
 //call this function anytime we get a malformed call
