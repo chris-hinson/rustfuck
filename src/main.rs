@@ -5,8 +5,9 @@ mod runner;
 mod runner_naive;
 mod tests;
 use std::env;
-
 use std::fs;
+use std::time::Instant;
+
 fn main() {
     //////////////////////////////encironment program setup////////////////////////////////////////
     let args: Vec<String> = env::args().collect();
@@ -26,6 +27,12 @@ fn main() {
 
     //optimization is only on or off
     let optimizing = !args.contains(&"O0".to_string());
+
+    //dump to asm only, no compile, no run
+    let dump_asm = args.contains(&"a".to_string());
+
+    //vm runner
+    let vm_run = args.contains(&"v".to_string());
 
     //read in our sourcecode from a file
     let source = match fs::read_to_string(filename) {
@@ -64,6 +71,7 @@ fn main() {
         parser::Program::new(exps)
     };
 
+    //print the ast and # of tokens if we have passed the flag to do so
     if debugging {
         parser::print_ast(prg.clone());
         println!(
@@ -87,34 +95,46 @@ fn main() {
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
-    /*let start_optimized = Instant::now();
-    match runner::run(prg) {
-        Ok(v) => {
-            println!("\n\n{v}: took {} ms", start_optimized.elapsed().as_millis());
+    if vm_run {
+        let start_optimized = Instant::now();
+        match runner::run(prg) {
+            Ok(v) => {
+                println!("\n\n{v}: took {} ms", start_optimized.elapsed().as_millis());
+            }
+            Err(e) => {
+                println!("Program encountered runtime error: {:?}", e);
+            }
         }
-        Err(e) => {
-            println!("Program encountered runtime error: {:?}", e);
-        }
-    }*/
+    }
     ///////////////////////////////////////////////////////////////////////////////////////////////
+    else {
+        let bf_prg_name = args[1]
+            .split("/")
+            .last()
+            .unwrap()
+            .split(".")
+            .nth(0)
+            .unwrap();
 
-    let bf_prg_name = args[1].split("/").last().unwrap().split(".").nth(0).unwrap();
-    //println!("bf_prg_raw_name is {bf_prg_name}");
-    /*println!(
-        "{:?}",
-        codegen::create_x86(bf_prg_name.to_string(), prg.exps)
-    );*/
-    match codegen::create_x86(bf_prg_name.to_string(), prg.exps) {
-        Ok(v) => {
-            println!("program executable created: {v}")
-        }
-        Err(e) => {
-            println!("there was an error creating our executable: {:?}", e)
+        match codegen::create_x86(bf_prg_name.to_string(), prg.exps) {
+            Ok(v) => {
+                println!("program executable created: {v}")
+            }
+            Err(e) => {
+                println!("there was an error creating our executable: {:?}", e)
+            }
         }
     }
 }
 
 //call this function anytime we get a malformed call
 fn print_help() {
-    println!("usage: ./bf source_file");
+    println!("usage: ./bf source_file\n
+    -O0 turns off optimizations
+
+    -d prints the ast, and does not run or create an x86 executable
+
+    -a creates an the assembly file in the current directory, but does not attempt to compile or run it
+
+    -v runs the ast through the vm, rather than compiling to x86 " );
 }

@@ -9,16 +9,16 @@ This crate uses `nasm` to assemble, and `ld` to link, so both of these programs 
 
 If you're on windows, give me a while to figure out what is going on with windows syscalls, and how to link object files on that OS. Might work on wsl?
 
-## building 
+## building
 `cargo build --release` will place the executable at `./target/release/rustfuck`. No external dependencies are required to build the program.
 
 ## running
 `./rustfuck program_name.bf`
-in addition, the following command line flags are provided 
+in addition, the following command line flags are provided
 
 -O0 turns off optimizations
 
--d prints the ast, and does not run or create an x86 executable
+-d prints the ast as soon as we finish compiling it. can be used in conjunction with other flags
 
 -a creates an the assembly file in the current directory, but does not attempt to compile or run it
 
@@ -28,13 +28,13 @@ in addition, the following command line flags are provided
 
 #### run-length encoding:
 
-brainfuck only gives us the ability to move the data pointer or change the value at a cell, one at a time.  This leads to extremely long runs of +,-,<,> which can be simplified to +n,-n,<n,>n where n is a number of repetitions. This is the first optimization pass, and the most impactful one. 
+brainfuck only gives us the ability to move the data pointer or change the value at a cell, one at a time.  This leads to extremely long runs of +,-,<,> which can be simplified to +n,-n,<n,>n where n is a number of repetitions. This is the first optimization pass, and the most impactful one.
 
 #### loop flattening:
 
 Loops are very expensive in time complexity, and due to brainfucks simple nature, occur extremely often. Thus, we stand to gain significantly from turning loops into a series of iterative operations. We do this in three major passes.
 
-Clear loops - loops of the form `[+]` or `[-]` simply set the value of the cell our data pointer is at to a constant value, 0. 
+Clear loops - loops of the form `[+]` or `[-]` simply set the value of the cell our data pointer is at to a constant value, 0.
 
 Scan loops - loops of the form `[<n]` or `[>n]` where n is the length of a run of the character, scan our data tape (to the left or right) to find a cell with the value 0, which is offset from our current data pointer by an amount divisible by n.
 
@@ -53,7 +53,7 @@ there are several patterns of brainfuck source that have no effect, including bu
 I pinkie promise I'll update this with some nice graphs and more detailed timings when I get a break from school.
 I'm benchmarking against the programs found in this repo https://github.com/matslina/bfoptimization.  
 
-Performance far outpaces any interpreter I've been able to find.  Native x86 execution seems on par with other optimizing compilers, such as bfc. 
+Performance far outpaces any interpreter I've been able to find.  Native x86 execution seems on par with other optimizing compilers, such as bfc.
 
 ## final remarks
 

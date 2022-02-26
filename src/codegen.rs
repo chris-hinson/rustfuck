@@ -70,7 +70,8 @@ pub fn create_x86(name: String, prg: Vec<crate::parser::AstNode>) -> Result<Stri
 }
 
 fn gen_header() -> String {
-    return ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;START PROLOGUE ;;;;;;;;;;;;;;;;;;;;;;;
+    return
+";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;START PROLOGUE ;;;;;;;;;;;;;;;;;;;;;;;
 global _start
 section .bss
         data_tape: resb 30000
@@ -79,15 +80,21 @@ section .text
 
 ;input macro
 %macro get_char 0
+        mov rbx, data_tape
+        mov rax, 0                ;syscall 0 - read
+        mov rdi, 0                ;read from stdin (fd = 0)
+        lea rsi, [rbx + r8]       ;put the char at our dp location on data tape
+        mov rdx, 1                ;we want to read exactly one character
+        syscall                   ;make the syscall
 %endmacro
 
 ;output macro
 %macro  print_char 0
         mov     rbx, data_tape
         mov     rax, 1             ;sys_write call number
-        mov     rdi, 1             ; write to stdout (fd=1)
-        lea     rsi, [rbx + r8]   ; use char at current dp
-        mov     rdx , 1            ; write 1 char
+        mov     rdi, 1             ;write to stdout (fd=1)
+        lea     rsi, [rbx + r8]    ;use char at current dp
+        mov     rdx , 1            ;write 1 char
         syscall
 %endmacro
 
@@ -103,6 +110,23 @@ section .text
         add al,%1
         mov [rbx+r8],al
 %endmacro
+
+;clear macro
+%macro clear 0
+        mov rbx,data_tape
+        mov [rbx + r8],0
+%endmacro
+
+;scan FUNCTION - find the closest 0 byte aligned to arg 0 and set r8 to that address
+;rdi = alignment
+scan_tape:
+
+
+        scan_loop_top:
+
+ret
+
+
 
 ;loop macro?
 
@@ -131,11 +155,9 @@ fn gen_code(
                 Operator::Change { amount } => code_buf.push_str(&format!("\nchange {}", amount)),
                 Operator::IO { kind } => match kind {
                     crate::parser::IOKind::Output => code_buf.push_str("\nprint_char"),
-                    crate::parser::IOKind::Input => {
-                        code_buf.push_str("\n;get_char not yet implemented")
-                    }
+                    crate::parser::IOKind::Input => code_buf.push_str("\nget_char"),
                 },
-                Operator::Clear => code_buf.push_str("\n;clear not yet implemented"),
+                Operator::Clear => code_buf.push_str("\nclear"),
                 Operator::Scan { alignment } => code_buf.push_str(&format!(
                     "\n;scan not yet implemented-> alignment: {}",
                     alignment
@@ -152,11 +174,16 @@ fn gen_code(
             AstNodeKind::Loop { exps } => {
                 let level = &exps[0].clone().id;
                 let cur_global_counter = *global_loop_counter;
+
+                local_loop_counter += 1;
+                *global_loop_counter += 1;
+
                 code_buf.push_str(&format!(
-                    "\nmov al,[rbx+r8]
-                     test al,al       ;sets zf=1 if al =0
-                     jz loop_bottom_{}_{}_{}   ;jump over loop body if data is 0
-                    loop_top_{}_{}_{}:\n ",
+                    "\n
+mov al,[rbx+r8]
+test al,al       ;sets zf=1 if al =0
+jz loop_bottom_{}_{}_{}   ;jump over loop body if data is 0
+loop_top_{}_{}_{}:\n ",
                     level,
                     local_loop_counter,
                     cur_global_counter,
@@ -166,11 +193,11 @@ fn gen_code(
                 ));
                 gen_code(exps, code_buf, global_loop_counter);
                 code_buf.push_str(&format!(
-                    " \n
-                     mov al,[rbx+r8] ;put the value of data_tape[dp] into rax
-                     test al,al     ;set zf=1 if rax & rax =0
-                     jnz loop_top_{}_{}_{}      ;continue looping if non-zero
-                    loop_bottom_{}_{}_{}:\n",
+                    "\n
+mov al,[rbx+r8] ;put the value of data_tape[dp] into rax
+test al,al     ;set zf=1 if rax & rax =0
+jnz loop_top_{}_{}_{}      ;continue looping if non-zero
+loop_bottom_{}_{}_{}:\n",
                     level,
                     local_loop_counter,
                     cur_global_counter,
@@ -178,9 +205,6 @@ fn gen_code(
                     local_loop_counter,
                     cur_global_counter
                 ));
-
-                local_loop_counter += 1;
-                *global_loop_counter += 1;
             }
         }
     }
@@ -198,7 +222,9 @@ fn gen_exit() -> String {
 //Ok(String) = string path of object file
 //Err(String) = error string of what went wrong attempting to invoke nasm
 fn gen_o(asm_filename: &str) -> Result<String, NasmErr> {
-    let nasm_res = nasm_rs::Build::new()
+    //note - this seems to be breaking when running in release mode. i dont want to debug it,
+    //so we are now running nasm through command line
+    /*let nasm_res = nasm_rs::Build::new()
         .file(asm_filename)
         .flag("-f elf64")
         .target("elf64")
@@ -217,7 +243,23 @@ fn gen_o(asm_filename: &str) -> Result<String, NasmErr> {
                         .to_string(),
             })
         }
-    };
+    };*/
+    match Command::new("nasm")
+        .arg("-f elf64")
+        .arg(asm_filename)
+        .status()
+    {
+        Ok(v) => {
+            println!(
+                "finished compiling -> ouput to: {}",
+                asm_filename.split(".").nth(0).unwrap()
+            );
+            return Ok(format!("{}.o", asm_filename.split(".").nth(0).unwrap()));
+        }
+        Err(e) => {
+            return Err(NasmErr{err_string: "failed to assemble file. most likely either a syntax error or NASM is not installed on the system".to_string()});
+        }
+    }
 }
 
 //returns
@@ -235,7 +277,7 @@ fn gen_exec(o_path_filename: String) -> Result<String, LinkErr> {
         .status()
     {
         Ok(v) => {
-            println!("finished linking -> output to : {}", raw_name);
+            println!("finished linking -> output to :{}", raw_name);
             return Ok(raw_name.to_owned());
         }
         Err(e) => {
